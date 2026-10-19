@@ -45,8 +45,29 @@ public class ItemService {
         Item item = itemRepository.findById(itemId)
                 .orElseThrow(() -> new RuntimeException("Item not found"));
 
-        List<BorrowRequest> requests =
-                borrowRequestRepository.findByItemId(itemId);
+        List<BorrowRequest> requests = borrowRequestRepository.findByItemId(itemId);
+
+        // Prevent deletion while borrowing is active
+        boolean hasActiveRequests = requests.stream()
+                .anyMatch(request -> {
+                    String status = request.getStatus();
+
+                    return "Pending".equalsIgnoreCase(status)
+                            || "Approved".equalsIgnoreCase(status)
+                            || "Waiting Confirmation".equalsIgnoreCase(status);
+                });
+
+        if (hasActiveRequests) {
+            throw new RuntimeException(
+                    "Cannot delete this item because it has an active borrowing request. " +
+                            "Please complete or resolve the request first.");
+        }
+
+        // Additional protection for borrowed items
+        if ("Borrowed".equalsIgnoreCase(item.getAvailability())) {
+            throw new RuntimeException(
+                    "Cannot delete this item while it is borrowed.");
+        }
 
         LocalDateTime deletedAt = LocalDateTime.now();
         String deletionReason = reason.trim();
